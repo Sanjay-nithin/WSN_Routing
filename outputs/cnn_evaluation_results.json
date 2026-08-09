@@ -1,0 +1,12 @@
+{
+  "cnn_classifier": {
+    "test_accuracy": 0.8988,
+    "per_class_f1": {
+      "Healthy": 0.9614,
+      "Congested": 0.8178,
+      "Unhealthy": 0.8585
+    },
+    "macro_avg_f1": 0.8793,
+    "weighted_avg_f1": 0.8995
+  }
+}
