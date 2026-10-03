@@ -1,0 +1,34 @@
+{
+  "train_samples": 6000,
+  "val_samples": 3000,
+  "test_samples": 3000,
+  "total_samples": 12000,
+  "train_class_distribution": {
+    "Healthy": 2963,
+    "Congested": 2956,
+    "Unhealthy": 81
+  },
+  "test_class_distribution": {
+    "Congested": 1606,
+    "Healthy": 1368,
+    "Unhealthy": 26
+  },
+  "feature_names": [
+    "Residual_Energy_Ratio",
+    "Energy_Depletion_Rate",
+    "Buffer_Occupancy_Ratio",
+    "Packet_Arrival_Rate",
+    "Packet_Service_Rate",
+    "Traffic_Intensity",
+    "Packet_Loss_Rate",
+    "Average_Queuing_Delay",
+    "Average_Neighbor_RSSI",
+    "Average_Neighbor_PRR",
+    "Neighbor_Degree",
+    "Distance_to_Sink_Ratio"
+  ],
+  "train_path": "V2/datasets/processed/train.csv",
+  "val_path": "V2/datasets/processed/val.csv",
+  "test_path": "V2/datasets/processed/test.csv",
+  "full_path": "V2/datasets/processed/full_dataset.csv"
+}

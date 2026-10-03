@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WSN Autonomous Routing & ML Telemetry Visualizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0a0f1d;
+      --bg-card: rgba(15, 23, 42, 0.75);
+      --border-card: rgba(56, 189, 248, 0.2);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-cyan: #06b6d4;
+      --accent-blue: #38bdf8;
+      --color-healthy: #10b981;
+      --color-congested: #f59e0b;
+      --color-unhealthy: #ef4444;
+      --color-sink: #38bdf8;
+      --color-source: #a855f7;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: 'Inter', sans-serif;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Navigation Bar */
+    header {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-card);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 10;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--accent-cyan), #3b82f6);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 18px;
+      color: #fff;
+      box-shadow: 0 0 15px rgba(6, 182, 212, 0.4);
+    }
+
+    .brand-text h1 {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #fff;
+    }
+
+    .brand-text p {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .kpi-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(30, 41, 59, 0.6);
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 12px;
+    }
+
+    .kpi-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .dot.healthy { background: var(--color-healthy); box-shadow: 0 0 8px var(--color-healthy); }
+    .dot.congested { background: var(--color-congested); box-shadow: 0 0 8px var(--color-congested); }
+    .dot.unhealthy { background: var(--color-unhealthy); box-shadow: 0 0 8px var(--color-unhealthy); }
+
+    .btn {
+      background: linear-gradient(135deg, #1e293b, #0f172a);
+      color: #f8fafc;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+      background: linear-gradient(135deg, #334155, #1e293b);
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 12px rgba(6, 182, 212, 0.25);
+    }
+
+    .btn.primary {
+      background: linear-gradient(135deg, #0891b2, #2563eb);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .btn.primary:hover {
+      background: linear-gradient(135deg, #06b6d4, #3b82f6);
+      box-shadow: 0 0 16px rgba(6, 182, 212, 0.5);
+    }
+
+    .btn.warning {
+      background: linear-gradient(135deg, #d97706, #b45309);
+    }
+
+    .btn.warning:hover {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      box-shadow: 0 0 14px rgba(245, 158, 11, 0.4);
+    }
+
+    /* Main Workspace Layout */
+    .workspace {
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 65px);
+      position: relative;
+    }
+
+    /* Topology Canvas Area */
+    .canvas-container {
+      flex: 1;
+      position: relative;
+      background: radial-gradient(circle at 50% 50%, #111a2e 0%, #0a0f1d 100%);
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+
+    .canvas-overlay {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      background: var(--bg-card);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border-card);
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      pointer-events: none;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .canvas-overlay strong {
+      color: var(--text-main);
+    }
+
+    .route-banner {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.9);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--accent-cyan);
+      border-radius: 30px;
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 0 25px rgba(6, 182, 212, 0.35);
+      font-size: 12px;
+      z-index: 5;
+    }
+
+    .route-tag {
+      background: var(--accent-cyan);
+      color: #000;
+      font-weight: 700;
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      text-transform: uppercase;
+    }
+
+    .route-path-text {
+      font-family: 'JetBrains Mono', monospace;
+      color: #38bdf8;
+      font-weight: 600;
+    }
+
+    /* Right Sidebar Inspector */
+    aside {
+      width: 380px;
+      background: rgba(15, 23, 42, 0.92);
+      backdrop-filter: blur(16px);
+      border-left: 1px solid var(--border-card);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 20px;
+      overflow-y: auto;
+      z-index: 10;
+    }
+
+    .sidebar-section {
+      background: rgba(30, 41, 59, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .node-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .node-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .status-badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .status-badge.healthy { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid var(--color-healthy); }
+    .status-badge.congested { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid var(--color-congested); }
+    .status-badge.unhealthy { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid var(--color-unhealthy); }
+
+    .telemetry-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+
+    .telemetry-label {
+      color: var(--text-muted);
+    }
+
+    .telemetry-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .progress-bar-bg {
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .prob-chart {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .prob-bar-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+    }
+
+    .prob-label {
+      width: 75px;
+      color: var(--text-muted);
+    }
+
+    .prob-track {
+      flex: 1;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .prob-fill {
+      height: 100%;
+      border-radius: 3px;
+    }
+
+    .prob-pct {
+      width: 40px;
+      text-align: right;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+    }
+
+    .log-terminal {
+      background: #050811;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #38bdf8;
+      max-height: 140px;
+      overflow-y: auto;
+      line-height: 1.5;
+    }
+
+    .log-line {
+      margin-bottom: 4px;
+    }
+
+    .log-line.avoided {
+      color: #fbbf24;
+      font-weight: 600;
+    }
+
+    .log-line.success {
+      color: #34d399;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">Ω</div>
+      <div class="brand-text">
+        <h1>WSN Autonomous Routing & ML Telemetry</h1>
+        <p>1D-CNN Telemetry Classifier + Dueling Double DQN</p>
+      </div>
+    </div>
+
+    <div class="header-controls">
+      <div class="kpi-group">
+        <div class="kpi-pill"><span class="dot healthy"></span> <span id="kpi-healthy">--</span> Healthy</div>
+        <div class="kpi-pill"><span class="dot congested"></span> <span id="kpi-congested">--</span> Congested</div>
+        <div class="kpi-pill"><span class="dot unhealthy"></span> <span id="kpi-unhealthy">--</span> Unhealthy</div>
+      </div>
+
+      <button id="btn-classify" class="btn primary">
+        <span>⚡</span> Run ML Classification
+      </button>
+
+      <button id="btn-congest" class="btn warning">
+        <span>🔥</span> Inject Congestion
+      </button>
+
+      <button id="btn-route" class="btn primary">
+        <span>🚀</span> Find RL Shortest Path
+      </button>
+
+      <button id="btn-reset" class="btn">
+        <span>↺</span> Reset
+      </button>
+    </div>
+  </header>
+
+  <!-- Workspace: Canvas & Inspector -->
+  <div class="workspace">
+    <div class="canvas-container">
+      <div class="canvas-overlay">
+        <div><strong>Field:</strong> 200m × 200m Field | IEEE 802.15.4 Physical Channel</div>
+        <div><strong>Radio:</strong> 50m Transmission Range | <strong>Sink:</strong> Base Station</div>
+        <div style="margin-top: 4px; color: #38bdf8;"><strong>Tip:</strong> Click any sensor node to inspect telemetry</div>
+      </div>
+
+      <canvas id="topoCanvas"></canvas>
+
+      <div id="routeBanner" class="route-banner" style="display: none;">
+        <span class="route-tag">Dueling DDQN Path</span>
+        <span id="routeText" class="route-path-text">--</span>
+        <span id="routeAvoidedText" style="color: #fbbf24; font-size: 11px;"></span>
+      </div>
+    </div>
+
+    <!-- Right Sidebar Inspector -->
+    <aside>
+      <!-- Node Inspector Card -->
+      <div class="sidebar-section">
+        <div class="section-title">
+          <span>Node Telemetry Inspector</span>
+          <span id="inspectMode" style="color: var(--accent-cyan);">Click any node</span>
+        </div>
+
+        <div class="node-header">
+          <div id="nodeName" class="node-title">Node --</div>
+          <div id="nodeBadge" class="status-badge healthy">HEALTHY</div>
+        </div>
+
+        <div class="telemetry-row">
+          <span class="telemetry-label">Residual Energy</span>
+          <span id="valEnergy" class="telemetry-val">-- J (--%)</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div id="barEnergy" class="progress-bar-fill" style="width: 100%; background: var(--color-healthy);"></div>
+        </div>
+
+        <div class="telemetry-row">
+          <span class="telemetry-label">Buffer Queue</span>
+          <span id="valQueue" class="telemetry-val">--/30 (--%)</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div id="barQueue" class="progress-bar-fill" style="width: 0%; background: var(--color-congested);"></div>
+        </div>
+
+        <div class="telemetry-row">
+          <span class="telemetry-label">Arrival Rate</span>
+          <span id="valRate" class="telemetry-val">-- pkts/s</span>
+        </div>
+        <div class="telemetry-row">
+          <span class="telemetry-label">Distance to Base Station</span>
+          <span id="valDist" class="telemetry-val">-- m</span>
+        </div>
+        <div class="telemetry-row">
+          <span class="telemetry-label">Link ETX Quality</span>
+          <span id="valEtx" class="telemetry-val">--</span>
+        </div>
+
+        <div style="margin-top: 14px; font-size: 11px; font-weight: 600; color: var(--text-muted);">
+          1D-CNN Confidence Probabilities:
+        </div>
+        <div class="prob-chart">
+          <div class="prob-bar-container">
+            <span class="prob-label">Healthy</span>
+            <div class="prob-track"><div id="probHealthy" class="prob-fill" style="width: 100%; background: var(--color-healthy);"></div></div>
+            <span id="pctHealthy" class="prob-pct">100%</span>
+          </div>
+          <div class="prob-bar-container">
+            <span class="prob-label">Congested</span>
+            <div class="prob-track"><div id="probCongested" class="prob-fill" style="width: 0%; background: var(--color-congested);"></div></div>
+            <span id="pctCongested" class="prob-pct">0%</span>
+          </div>
+          <div class="prob-bar-container">
+            <span class="prob-label">Unhealthy</span>
+            <div class="prob-track"><div id="probUnhealthy" class="prob-fill" style="width: 0%; background: var(--color-unhealthy);"></div></div>
+            <span id="pctUnhealthy" class="prob-pct">0%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Autonomous Routing Engine -->
+      <div class="sidebar-section">
+        <div class="section-title">
+          <span>RL Routing Engine</span>
+          <span style="color: var(--accent-cyan);">Dueling DDQN</span>
+        </div>
+        <div style="font-size: 11px; color: var(--text-muted); line-height: 1.5; margin-bottom: 10px;">
+          Neural Agent separates State Value $V(s)$ from Advantage $A(s, a)$. Uses Action Masking to avoid buffer overflow packet drops.
+        </div>
+        <div class="telemetry-row">
+          <span class="telemetry-label">Source Node</span>
+          <select id="sourceSelect" style="background: #1e293b; color: #fff; border: 1px solid var(--border-card); padding: 2px 6px; border-radius: 4px; font-size: 11px;">
+            <option value="11">Node 11 (Corner, 116m)</option>
+            <option value="8">Node 8 (Edge, 83m)</option>
+            <option value="3">Node 3 (73m)</option>
+            <option value="1">Node 1 (77m)</option>
+          </select>
+        </div>
+        <div class="telemetry-row">
+          <span class="telemetry-label">Destination</span>
+          <span class="telemetry-val" style="color: var(--accent-cyan);">Base Station (Sink)</span>
+        </div>
+      </div>
+
+      <!-- Live Execution Log -->
+      <div class="sidebar-section">
+        <div class="section-title">
+          <span>Live Routing Decision Log</span>
+        </div>
+        <div id="logTerminal" class="log-terminal">
+          <div class="log-line">System initialized. Ready for simulation.</div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    // Visualizer State
+    let networkData = null;
+    let selectedNodeId = 11;
+    let activePath = [];
+    let animationProgress = 0.0;
+    let animatingPacket = false;
+    let packetHopIdx = 0;
+
+    const canvas = document.getElementById('topoCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      const container = canvas.parentElement;
+      canvas.width = container.clientWidth * window.devicePixelRatio;
+      canvas.height = container.clientHeight * window.devicePixelRatio;
+      draw();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // Fetch initial network state
+    async function loadNetworkState() {
+      try {
+        const res = await fetch('/api/state');
+        networkData = await res.json();
+        updateKPIs();
+        populateSourceSelect();
+        selectNode(selectedNodeId);
+        draw();
+      } catch (err) {
+        console.error('Failed to load state:', err);
+      }
+    }
+
+    function populateSourceSelect() {
+      if (!networkData) return;
+      const select = document.getElementById('sourceSelect');
+      select.innerHTML = '';
+      const connected = networkData.nodes.filter(n => !n.is_sink && n.neighbors_count > 0 && n.dist_to_sink > 65);
+      connected.sort((a, b) => b.dist_to_sink - a.dist_to_sink);
+      connected.forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n.id;
+        opt.textContent = `Node ${n.id} (${n.dist_to_sink.toFixed(0)}m to sink)`;
+        select.appendChild(opt);
+      });
+      if (connected.length > 0) {
+        selectedNodeId = connected[0].id;
+        select.value = selectedNodeId;
+      }
+    }
+
+    function updateKPIs() {
+      if (!networkData) return;
+      let healthy = 0, congested = 0, unhealthy = 0;
+      networkData.nodes.forEach(n => {
+        if (!n.is_sink) {
+          if (n.classification === 0) healthy++;
+          else if (n.classification === 1) congested++;
+          else unhealthy++;
+        }
+      });
+      document.getElementById('kpi-healthy').textContent = healthy;
+      document.getElementById('kpi-congested').textContent = congested;
+      document.getElementById('kpi-unhealthy').textContent = unhealthy;
+    }
+
+    function selectNode(id) {
+      if (!networkData) return;
+      selectedNodeId = id;
+      const node = networkData.nodes.find(n => n.id === id);
+      if (!node) return;
+
+      document.getElementById('nodeName').textContent = node.is_sink ? 'Base Station (Sink)' : `Sensor Node ${node.id}`;
+      const badge = document.getElementById('nodeBadge');
+      if (node.is_sink) {
+        badge.className = 'status-badge healthy';
+        badge.textContent = 'GATEWAY SINK';
+      } else if (node.classification === 0) {
+        badge.className = 'status-badge healthy';
+        badge.textContent = 'HEALTHY';
+      } else if (node.classification === 1) {
+        badge.className = 'status-badge congested';
+        badge.textContent = 'CONGESTED';
+      } else {
+        badge.className = 'status-badge unhealthy';
+        badge.textContent = 'UNHEALTHY';
+      }
+
+      document.getElementById('valEnergy').textContent = `${node.residual_energy.toFixed(2)} J (${(node.energy_ratio * 100).toFixed(1)}%)`;
+      const barEnergy = document.getElementById('barEnergy');
+      barEnergy.style.width = `${node.energy_ratio * 100}%`;
+      barEnergy.style.background = node.energy_ratio > 0.3 ? 'var(--color-healthy)' : 'var(--color-unhealthy)';
+
+      document.getElementById('valQueue').textContent = `${node.queue_length}/${node.queue_capacity} (${(node.queue_occupancy * 100).toFixed(0)}%)`;
+      const barQueue = document.getElementById('barQueue');
+      barQueue.style.width = `${node.queue_occupancy * 100}%`;
+      barQueue.style.background = node.queue_occupancy > 0.7 ? 'var(--color-congested)' : 'var(--color-healthy)';
+
+      document.getElementById('valRate').textContent = `${node.arrival_rate.toFixed(1)} pkts/s`;
+      document.getElementById('valDist').textContent = `${node.dist_to_sink.toFixed(1)} m`;
+      document.getElementById('valEtx').textContent = node.etx ? node.etx.toFixed(2) : '1.00';
+
+      const p0 = (node.probs[0] * 100).toFixed(1);
+      const p1 = (node.probs[1] * 100).toFixed(1);
+      const p2 = (node.probs[2] * 100).toFixed(1);
+
+      document.getElementById('probHealthy').style.width = `${p0}%`;
+      document.getElementById('pctHealthy').textContent = `${p0}%`;
+      document.getElementById('probCongested').style.width = `${p1}%`;
+      document.getElementById('pctCongested').textContent = `${p1}%`;
+      document.getElementById('probUnhealthy').style.width = `${p2}%`;
+      document.getElementById('pctUnhealthy').textContent = `${p2}%`;
+
+      draw();
+    }
+
+    // World to Canvas coordinate mapping
+    function toCanvasCoords(x, y) {
+      const fieldW = networkData ? networkData.field_width : 200;
+      const fieldH = networkData ? networkData.field_height : 200;
+      const pad = 50 * window.devicePixelRatio;
+      const availW = canvas.width - (pad * 2);
+      const availH = canvas.height - (pad * 2);
+
+      const scale = Math.min(availW / fieldW, availH / fieldH);
+      const cx = pad + (x * scale);
+      const cy = canvas.height - (pad + (y * scale)); // Invert Y
+      return { x: cx, y: cy, scale: scale };
+    }
+
+    function toWorldCoords(cx, cy) {
+      const fieldW = networkData ? networkData.field_width : 200;
+      const fieldH = networkData ? networkData.field_height : 200;
+      const pad = 50 * window.devicePixelRatio;
+      const availW = canvas.width - (pad * 2);
+      const availH = canvas.height - (pad * 2);
+      const scale = Math.min(availW / fieldW, availH / fieldH);
+
+      const wx = (cx - pad) / scale;
+      const wy = (canvas.height - cy - pad) / scale;
+      return { x: wx, y: wy };
+    }
+
+    function draw() {
+      if (!networkData) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw faint coordinate grid
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1;
+      const step = 25;
+      for (let x = 0; x <= 200; x += step) {
+        const p1 = toCanvasCoords(x, 0);
+        const p2 = toCanvasCoords(x, 200);
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= 200; y += step) {
+        const p1 = toCanvasCoords(0, y);
+        const p2 = toCanvasCoords(200, y);
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+      }
+
+      // Draw Base Station transmission radius
+      const sinkNode = networkData.nodes.find(n => n.is_sink);
+      if (sinkNode) {
+        const sp = toCanvasCoords(sinkNode.x, sinkNode.y);
+        const radiusCanvas = networkData.tx_range * sp.scale;
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.2)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.arc(sp.x, sp.y, radiusCanvas, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Draw Wireless Communication Links
+      ctx.strokeStyle = 'rgba(51, 65, 85, 0.45)';
+      ctx.lineWidth = 1;
+      networkData.links.forEach(link => {
+        const n1 = networkData.nodes.find(n => n.id === link[0]);
+        const n2 = networkData.nodes.find(n => n.id === link[1]);
+        if (n1 && n2) {
+          const p1 = toCanvasCoords(n1.x, n1.y);
+          const p2 = toCanvasCoords(n2.x, n2.y);
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.stroke();
+        }
+      });
+
+      // Draw Active RL Route Path
+      if (activePath.length > 1) {
+        ctx.strokeStyle = '#06b6d4';
+        ctx.lineWidth = 3.5 * window.devicePixelRatio;
+        ctx.shadowColor = '#06b6d4';
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        for (let i = 0; i < activePath.length; i++) {
+          const node = networkData.nodes.find(n => n.id === activePath[i]);
+          if (node) {
+            const p = toCanvasCoords(node.x, node.y);
+            if (i === 0) ctx.moveTo(p.x, p.y);
+            else ctx.lineTo(p.x, p.y);
+          }
+        }
+        ctx.stroke();
+        ctx.shadowBlur = 0; // Reset shadow
+
+        // Animate Packet Bullet moving along the route
+        if (animatingPacket && packetHopIdx < activePath.length - 1) {
+          const nA = networkData.nodes.find(n => n.id === activePath[packetHopIdx]);
+          const nB = networkData.nodes.find(n => n.id === activePath[packetHopIdx + 1]);
+          if (nA && nB) {
+            const pA = toCanvasCoords(nA.x, nA.y);
+            const pB = toCanvasCoords(nB.x, nB.y);
+            const curX = pA.x + (pB.x - pA.x) * animationProgress;
+            const curY = pA.y + (pB.y - pA.y) * animationProgress;
+
+            // Glowing bullet
+            ctx.fillStyle = '#fff';
+            ctx.shadowColor = '#22d3ee';
+            ctx.shadowBlur = 18;
+            ctx.beginPath();
+            ctx.arc(curX, curY, 7 * window.devicePixelRatio, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+          }
+        }
+      }
+
+      // Draw Nodes
+      networkData.nodes.forEach(node => {
+        const p = toCanvasCoords(node.x, node.y);
+        const radius = (node.is_sink ? 14 : 9) * window.devicePixelRatio;
+
+        // Selection / Path Halo
+        if (node.id === selectedNodeId) {
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 2.5 * window.devicePixelRatio;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, radius + 6, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        if (activePath.includes(node.id) && !node.is_sink) {
+          ctx.fillStyle = 'rgba(6, 182, 212, 0.25)';
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, radius + 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Color coding
+        let nodeColor = '#10b981';
+        if (node.is_sink) nodeColor = '#38bdf8';
+        else if (node.classification === 1) nodeColor = '#f59e0b';
+        else if (node.classification === 2) nodeColor = '#ef4444';
+
+        ctx.fillStyle = nodeColor;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5 * window.devicePixelRatio;
+        ctx.stroke();
+
+        // Label
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `${10 * window.devicePixelRatio}px 'Inter', sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        if (node.is_sink) {
+          ctx.fillText('★ BS', p.x, p.y - (radius + 10));
+        } else {
+          ctx.fillText(`N${node.id}`, p.x, p.y + (radius + 12));
+        }
+      });
+    }
+
+    // Packet Animation Loop
+    function stepAnimation() {
+      if (!animatingPacket) return;
+      animationProgress += 0.04;
+      if (animationProgress >= 1.0) {
+        animationProgress = 0.0;
+        packetHopIdx++;
+        if (packetHopIdx >= activePath.length - 1) {
+          animatingPacket = false;
+          addLog(`[DELIVERED] Packet reached Base Station in ${activePath.length - 1} hops!`, 'success');
+        }
+      }
+      draw();
+      if (animatingPacket) {
+        requestAnimationFrame(stepAnimation);
+      }
+    }
+
+    // Canvas click to select node
+    canvas.addEventListener('click', (e) => {
+      if (!networkData) return;
+      const rect = canvas.getBoundingClientRect();
+      const clickX = (e.clientX - rect.left) * window.devicePixelRatio;
+      const clickY = (e.clientY - rect.top) * window.devicePixelRatio;
+
+      let closest = null;
+      let minD = Infinity;
+
+      networkData.nodes.forEach(node => {
+        const p = toCanvasCoords(node.x, node.y);
+        const dist = Math.hypot(p.x - clickX, p.y - clickY);
+        if (dist < minD) {
+          minD = dist;
+          closest = node;
+        }
+      });
+
+      if (closest && minD < 25 * window.devicePixelRatio) {
+        selectNode(closest.id);
+        if (!closest.is_sink) {
+          document.getElementById('sourceSelect').value = closest.id;
+        }
+      }
+    });
+
+    // Logging helper
+    function addLog(msg, type = 'normal') {
+      const term = document.getElementById('logTerminal');
+      const line = document.createElement('div');
+      line.className = `log-line ${type}`;
+      line.textContent = `• ${msg}`;
+      term.appendChild(line);
+      term.scrollTop = term.scrollHeight;
+    }
+
+    // Event Handlers
+    document.getElementById('btn-classify').addEventListener('click', async () => {
+      addLog('Running 1D-CNN node classification across network...');
+      const res = await fetch('/api/classify', { method: 'POST' });
+      networkData = await res.json();
+      updateKPIs();
+      selectNode(selectedNodeId);
+      addLog('Classification complete! Node statuses updated.', 'success');
+    });
+
+    document.getElementById('btn-congest').addEventListener('click', async () => {
+      addLog('Injecting heavy burst traffic into central bottleneck nodes...');
+      const res = await fetch('/api/congest', { method: 'POST' });
+      networkData = await res.json();
+      updateKPIs();
+      selectNode(selectedNodeId);
+      addLog('Bottleneck buffer bloat created! Nodes classified as CONGESTED.', 'avoided');
+    });
+
+    document.getElementById('btn-route').addEventListener('click', async () => {
+      const srcId = parseInt(document.getElementById('sourceSelect').value, 10);
+      addLog(`Finding optimal Dueling DDQN path from Node ${srcId} to Base Station...`);
+      const res = await fetch(`/api/route?source=${srcId}`, { method: 'POST' });
+      const data = await res.json();
+
+      activePath = data.path;
+      document.getElementById('routeBanner').style.display = 'flex';
+      const pathNames = activePath.map(id => id === networkData.sink_id ? 'BASE STATION' : `N${id}`).join(' → ');
+      document.getElementById('routeText').textContent = pathNames;
+
+      if (data.avoided && data.avoided.length > 0) {
+        document.getElementById('routeAvoidedText').textContent = `(Bypassed Congested: [${data.avoided.join(', ')}])`;
+        addLog(`[Dueling DDQN] Proactively bypassed congested nodes: [${data.avoided.join(', ')}]`, 'avoided');
+      } else {
+        document.getElementById('routeAvoidedText').textContent = '';
+      }
+
+      addLog(`Route discovered: ${pathNames} (${activePath.length - 1} hops) in ${data.latency_ms.toFixed(2)}ms`);
+
+      // Start packet animation
+      animatingPacket = true;
+      animationProgress = 0.0;
+      packetHopIdx = 0;
+      stepAnimation();
+    });
+
+    document.getElementById('btn-reset').addEventListener('click', async () => {
+      addLog('Resetting simulation network state...');
+      const res = await fetch('/api/reset', { method: 'POST' });
+      networkData = await res.json();
+      activePath = [];
+      animatingPacket = false;
+      document.getElementById('routeBanner').style.display = 'none';
+      updateKPIs();
+      selectNode(selectedNodeId);
+      addLog('Network restored to initial state.');
+    });
+
+    document.getElementById('sourceSelect').addEventListener('change', (e) => {
+      selectNode(parseInt(e.target.value, 10));
+    });
+
+    // Initial load
+    resizeCanvas();
+    loadNetworkState();
+  </script>
+</body>
+</html>

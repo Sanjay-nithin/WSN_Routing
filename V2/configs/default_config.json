@@ -1,0 +1,64 @@
+{
+  "network": {
+    "num_nodes": 50,
+    "field_width": 200.0,
+    "field_height": 200.0,
+    "sink_pos": [100.0, 100.0],
+    "tx_range": 50.0,
+    "topology_type": "random",
+    "seed": 42
+  },
+  "channel": {
+    "path_loss_exponent": 2.5,
+    "ref_distance": 1.0,
+    "ref_path_loss_db": 40.0,
+    "shadowing_std": 2.0,
+    "noise_floor_dbm": -95.0,
+    "tx_power_dbm": 0.0,
+    "sinr_threshold_db": 4.0
+  },
+  "energy": {
+    "initial_energy_j": 5.0,
+    "heterogeneous": false,
+    "hetero_min_j": 2.0,
+    "hetero_max_j": 5.0,
+    "e_elec": 5e-8,
+    "e_fs": 1e-11,
+    "e_mp": 1.3e-15,
+    "d0": 87.0,
+    "e_da": 5e-9,
+    "e_crit_ratio": 0.15
+  },
+  "queue_and_traffic": {
+    "queue_capacity": 30,
+    "packet_size_bits": 4000,
+    "control_packet_size_bits": 256,
+    "service_rate_pkts_per_sec": 12.0,
+    "traffic_pattern": "poisson",
+    "arrival_rate_pkts_per_sec": 2.5,
+    "source_ratio": 0.5,
+    "burst_peak_rate": 18.0,
+    "burst_prob": 0.15
+  },
+  "labeling": {
+    "queue_congested_ratio": 0.70,
+    "traffic_intensity_threshold": 0.90,
+    "energy_unhealthy_ratio": 0.15,
+    "plr_unhealthy_threshold": 0.40,
+    "prr_unhealthy_threshold": 0.65
+  },
+  "routing": {
+    "weights": {
+      "alpha_dist": 0.25,
+      "beta_traffic": 0.25,
+      "gamma_energy": 0.25,
+      "eta_ml": 0.25
+    },
+    "risk_weights": {
+      "w_c": 0.8,
+      "w_u": 2.0
+    },
+    "hysteresis_factor": 0.15,
+    "reroute_interval_s": 2.0
+  }
+}
