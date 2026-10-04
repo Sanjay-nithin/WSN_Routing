@@ -47,22 +47,40 @@ def generate_topology_plot(
 
     network = WSNNetwork(cfg)
 
+    # Select a reliable peripheral source node far from sink
+    connected_sources = [
+        i for i in range(network.num_nodes)
+        if len(network.nodes[i].neighbors) > 0 and network.nodes[i].dist_to_sink > 70
+    ]
+    if source_node_id is None:
+        source_node_id = max(connected_sources, key=lambda i: network.nodes[i].dist_to_sink) if connected_sources else 1
+
     # 1. Warm up simulation slightly to accumulate realistic queue & energy telemetry
     for _ in range(25):
         network.step(dt=0.2, routing_function=lambda u, net: min(net.nodes[u].neighbors, key=lambda v: net.nodes[v].dist_to_sink) if net.nodes[u].neighbors else None)
 
-    # Inject realistic congestion / battery drain at key bottleneck nodes if requested
+    # Inject realistic congestion / battery drain at key intermediate nodes if requested
     if inject_congestion:
         from V2.simulator.packet import Packet
-        bottleneck_candidates = [n for n in range(network.num_nodes) if 40 < network.nodes[n].dist_to_sink < 95]
-        if len(bottleneck_candidates) >= 2:
-            congested_node = bottleneck_candidates[0]
-            unhealthy_node = bottleneck_candidates[1]
-            c_node = network.nodes[congested_node]
+        candidates = [n for n in range(network.num_nodes) if n != network.sink_id and n != source_node_id and len(network.nodes[n].neighbors) > 0]
+        
+        # 3 Congested nodes (high buffer bloat, queue occupancy > 85%)
+        congested_candidates = [n for n in candidates if 40 < network.nodes[n].dist_to_sink < 95][:3]
+        for c_id in congested_candidates:
+            c_node = network.nodes[c_id]
             target_pkts = int(c_node.queue_capacity * 0.88)
             for k in range(target_pkts):
-                c_node.packet_queue.append(Packet(packet_id=9000 + k, source_id=congested_node, dest_id=network.sink_id, creation_time=0.0))
-            network.nodes[unhealthy_node].energy.residual_energy = 0.35  # ~7% remaining battery
+                c_node.packet_queue.append(Packet(packet_id=9000 + k, source_id=c_id, dest_id=network.sink_id, creation_time=0.0))
+            c_node.epoch_arrivals = 30
+            c_node.epoch_serviced = 5
+
+        # 4 Unhealthy nodes (critical battery depletion E_res <= 0.20J and high packet loss rate)
+        unhealthy_candidates = [n for n in candidates if n not in congested_candidates and network.nodes[n].dist_to_sink > 30][:4]
+        for u_id in unhealthy_candidates:
+            u_node = network.nodes[u_id]
+            u_node.energy.residual_energy = 0.20  # ~4% battery remaining
+            u_node.epoch_drops = 25
+            u_node.epoch_arrivals = 5
 
     # 2. Run 1D-CNN Node Classification (Deep Learning Feature Encoder)
     import torch
@@ -93,17 +111,6 @@ def generate_topology_plot(
 
     rl_env = WSNRoutingRLEnv(network, ml_model=cnn_model, preprocessor=scaler)
     node_risks = rl_env.get_node_ml_risks()
-
-    # Pick a connected source node far from sink (corner / edge)
-    if source_node_id is None:
-        connected_sources = [
-            i for i in range(network.num_nodes)
-            if len(network.nodes[i].neighbors) > 0 and network.nodes[i].dist_to_sink > 70
-        ]
-        if connected_sources:
-            source_node_id = max(connected_sources, key=lambda i: network.nodes[i].dist_to_sink)
-        else:
-            source_node_id = 1
 
     path = [source_node_id]
     curr = source_node_id

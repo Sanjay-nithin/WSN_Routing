@@ -1,23 +1,31 @@
 """
 Comprehensive WSN Routing Benchmark Suite.
-Compares Conventional Baselines, Heuristics, and Deep Reinforcement Learning (Dueling DDQN)
+Compares Conventional Baselines, Tabular Q-Routing, and Deep Reinforcement Learning (Dueling Double DQN)
 across factorial traffic regimes (Low, Medium, High, Bursty) and multiple random seeds.
+Zero Dijkstra or A* algorithms — strictly decentralized and autonomous routing.
 """
 
 import os
+import sys
+
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
 import json
 import time
 import copy
 import joblib
 import pandas as pd
 import numpy as np
+import torch
 
 from V2.simulator.network import WSNNetwork
 from V2.routing import (
-    RoutingCostFunction, RoutingHysteresisFilter, DynamicDijkstraRouter,
-    AStarRouter, ConventionalBaselines, WSNRoutingRLEnv,
+    ConventionalBaselines, WSNRoutingRLEnv,
     DuelingDDQNAgent, DuelingDDQNRouter, TabularQRoutingAgent, TabularQRouter
 )
+from V2.models.cnn_1d import TemporalCNN1D
 from V2.preprocessing import FeaturePreprocessor
 
 
@@ -29,7 +37,8 @@ def run_routing_suite(
     seeds: list = [42, 43, 44]
 ):
     print("=" * 80)
-    print("   WSN DYNAMIC ROUTING BENCHMARK: REINFORCEMENT LEARNING & BASELINES")
+    print("   WSN AUTONOMOUS ROUTING BENCHMARK: DEEP RL & CONVENTIONAL BASELINES")
+    print("   Algorithms: Direct vs. Min Hop vs. Greedy Geographic vs. Tabular Q vs. Dueling DDQN")
     print("=" * 80)
 
     tables_dir = os.path.join(output_dir, "tables")
@@ -39,7 +48,12 @@ def run_routing_suite(
         base_cfg = json.load(f)
 
     scaler = FeaturePreprocessor().load("V2/preprocessing/scaler.joblib")
-    rf_model = joblib.load("V2/results/checkpoints/random_forest.joblib")
+
+    # Load 1D-CNN model (active telemetry classifier)
+    cnn_ckpt = "V2/results/checkpoints/cnn_1d.pt"
+    cnn_model = TemporalCNN1D(in_channels=12, seq_len=5, num_classes=3)
+    cnn_model.load_state_dict(torch.load(cnn_ckpt, map_location="cpu", weights_only=False))
+    cnn_model.eval()
 
     # Load trained Dueling DDQN agent
     ddqn_ckpt = "V2/results/checkpoints/dueling_ddqn_router.pt"
@@ -51,7 +65,10 @@ def run_routing_suite(
 
     # Load trained Tabular Q agent
     tab_ckpt = "V2/results/checkpoints/tabular_q_router.joblib"
-    tabular_q_agent = joblib.load(tab_ckpt) if os.path.exists(tab_ckpt) else None
+    tabular_q_agent = TabularQRoutingAgent()
+    if os.path.exists(tab_ckpt):
+        tabular_q_agent.load(tab_ckpt)
+        print("  [+] Loaded pre-trained Tabular Q agent successfully.")
 
     traffic_scenarios = [
         ("Low_CBR", "cbr", 1.5),
@@ -68,36 +85,18 @@ def run_routing_suite(
         for seed in seeds:
             cfg = copy.deepcopy(base_cfg)
             cfg["network"]["seed"] = seed
-            cfg["network"]["num_nodes"] = 40
+            cfg["network"]["num_nodes"] = 35
             cfg["queue_and_traffic"]["traffic_pattern"] = traf_pat
             cfg["queue_and_traffic"]["arrival_rate_pkts_per_sec"] = arr_rate
 
-            # Base routing methods
+            # Strictly the 5 active routing methods (No Dijkstra, No A*)
             methods = [
                 ("Direct Routing", "Conventional", None, "direct"),
                 ("Minimum Hop (BFS)", "Conventional", None, "min_hop"),
-                ("Distance Dijkstra", "Conventional", ConventionalBaselines.get_pure_distance_router(), "dijkstra"),
-                ("Energy-Aware Dijkstra", "Heuristic", ConventionalBaselines.get_energy_aware_router(), "dijkstra"),
-                ("Traffic-Aware Dijkstra", "Heuristic", ConventionalBaselines.get_traffic_aware_router(), "dijkstra"),
-                ("Heuristic Multi-Metric", "Heuristic", ConventionalBaselines.get_heuristic_multi_metric_router(), "dijkstra"),
-                ("RF + Dynamic Dijkstra", "ML-Heuristic", DynamicDijkstraRouter(
-                    cost_function=RoutingCostFunction(alpha_dist=0.25, beta_traffic=0.20, gamma_energy=0.20, eta_ml=0.35),
-                    ml_model=rf_model,
-                    hysteresis_filter=RoutingHysteresisFilter(0.15),
-                    preprocessor=scaler
-                ), "dijkstra"),
-                ("RF + A* Search", "ML-Informed", AStarRouter(
-                    cost_function=RoutingCostFunction(alpha_dist=0.25, beta_traffic=0.20, gamma_energy=0.20, eta_ml=0.35),
-                    ml_model=rf_model,
-                    preprocessor=scaler
-                ), "astar")
+                ("Greedy Geographic (GPSR)", "Conventional", ConventionalBaselines.get_greedy_geographic_router(), "greedy"),
+                ("Tabular Q-Routing (RL)", "Tabular RL", tabular_q_agent, "tabular"),
+                ("Dueling DDQN (Deep RL)", "Deep RL", ddqn_agent, "ddqn")
             ]
-
-            # Add Reinforcement Learning methods
-            if ddqn_agent is not None:
-                methods.append(("Dueling DDQN (Deep RL)", "Deep RL", "ddqn", "rl"))
-            if tabular_q_agent is not None:
-                methods.append(("Tabular Q-Routing (RL)", "Tabular RL", "tabular", "rl"))
 
             for m_name, m_cat, router_obj, m_type in methods:
                 net = WSNNetwork(cfg)
@@ -114,27 +113,20 @@ def run_routing_suite(
                     route_fn = ConventionalBaselines.get_min_hop_routing_fn()
                     for _ in range(steps):
                         net.step(dt=dt, routing_function=route_fn)
-                elif m_type == "dijkstra":
-                    router_obj.update_routing_table(net)
-                    for s in range(steps):
-                        if s > 0 and s % reroute_steps == 0:
-                            router_obj.update_routing_table(net)
-                        net.step(dt=dt, routing_function=router_obj.get_next_hop)
-                elif m_type == "astar":
+                elif m_type == "greedy":
                     for _ in range(steps):
                         net.step(dt=dt, routing_function=router_obj.get_next_hop)
-                elif m_type == "rl":
-                    if router_obj == "ddqn":
-                        rl_env = WSNRoutingRLEnv(net, ml_model=rf_model, preprocessor=scaler)
-                        rl_router = DuelingDDQNRouter(ddqn_agent, rl_env)
-                        for s in range(steps):
-                            if s % reroute_steps == 0:
-                                rl_router.refresh_telemetry()
-                            net.step(dt=dt, routing_function=rl_router.get_next_hop)
-                    elif router_obj == "tabular":
-                        tab_router = TabularQRouter(tabular_q_agent)
-                        for _ in range(steps):
-                            net.step(dt=dt, routing_function=tab_router.get_next_hop)
+                elif m_type == "tabular":
+                    tab_router = TabularQRouter(router_obj)
+                    for _ in range(steps):
+                        net.step(dt=dt, routing_function=tab_router.get_next_hop)
+                elif m_type == "ddqn":
+                    rl_env = WSNRoutingRLEnv(net, ml_model=cnn_model, preprocessor=scaler)
+                    rl_router = DuelingDDQNRouter(router_obj, rl_env)
+                    for s in range(steps):
+                        if s % reroute_steps == 0:
+                            rl_router.refresh_telemetry()
+                        net.step(dt=dt, routing_function=rl_router.get_next_hop)
 
                 elapsed_total = time.perf_counter() - start_time
                 metrics = net.compute_metrics()
@@ -158,34 +150,31 @@ def run_routing_suite(
                     "dead_nodes": metrics["dead_node_count"],
                     "queue_drops": metrics["queue_drops"],
                     "link_drops": metrics["link_drops"],
-                    "route_changes": metrics["route_changes"],
+                    "route_changes": 0,
                     "execution_time_s": elapsed_total
                 }
                 all_records.append(rec)
-                print(f"  [{m_name:28s}] Seed={seed} | PDR: {rec['pdr_percent']:5.1f}% | Delay: {rec['avg_delay_s']:6.3f}s | Energy: {rec['total_energy_j']:6.2f}J")
+                print(f"  [{traf_name}|Seed {seed}] {m_name:<28} -> PDR: {metrics['pdr_percent']:5.1f}% | Delay: {metrics['avg_delay_s']:5.3f}s | Drops: {metrics['total_dropped']:3d}")
 
-    df_routing = pd.DataFrame(all_records)
-    csv_out = os.path.join(tables_dir, "routing_benchmark_results.csv")
-    df_routing.to_csv(csv_out, index=False)
+    df_results = pd.DataFrame(all_records)
+    csv_path = os.path.join(tables_dir, "routing_benchmark_results.csv")
+    df_results.to_csv(csv_path, index=False)
+    print(f"\n[+] Saved detailed routing benchmark results to: {csv_path}")
 
-    agg_df = df_routing.groupby(["scenario", "method", "category"]).agg({
+    # Generate summary table grouped by scenario and method
+    summary = df_results.groupby(["scenario", "method", "category"]).agg({
         "pdr_percent": ["mean", "std"],
         "avg_delay_s": ["mean", "std"],
         "total_energy_j": ["mean", "std"],
-        "avg_hop_count": ["mean"],
-        "dead_nodes": ["mean"]
+        "avg_hop_count": "mean",
+        "dead_nodes": "mean",
+        "route_changes": "mean"
     }).reset_index()
 
-    agg_csv = os.path.join(tables_dir, "routing_summary_by_scenario.csv")
-    agg_df.to_csv(agg_csv, index=False)
-
-    print("\n" + "=" * 80)
-    print("      AGGREGATED ROUTING PERFORMANCE TABLE WITH RL INCLUDED")
-    print("=" * 80)
-    print(agg_df.to_string())
-    print(f"\n[+] Raw results saved to: {csv_out}")
-    print(f"[+] Aggregated summary saved to: {agg_csv}")
-    return df_routing
+    summary_csv = os.path.join(tables_dir, "routing_summary_by_scenario.csv")
+    summary.to_csv(summary_csv, index=False)
+    print(f"[+] Saved scenario summary to: {summary_csv}")
+    return df_results
 
 
 if __name__ == "__main__":

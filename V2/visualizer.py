@@ -68,7 +68,7 @@ class WSNVisualizerApp:
         for _ in range(20):
             self.network.step(dt=0.2, routing_function=lambda u, net: min(net.nodes[u].neighbors, key=lambda v: net.nodes[v].dist_to_sink) if net.nodes[u].neighbors else None)
 
-        self.classify_all()
+        self.inject_congestion()
 
     def classify_all(self):
         features, _ = self.network.collect_dataset_sample()
@@ -77,13 +77,26 @@ class WSNVisualizerApp:
         self.preds = self.cnn_model.predict(scaled)
 
     def inject_congestion(self):
-        bottlenecks = [n for n in range(self.network.num_nodes) if 35 < self.network.nodes[n].dist_to_sink < 90]
-        if len(bottlenecks) >= 2:
-            c1 = self.network.nodes[bottlenecks[0]]
-            for k in range(int(c1.queue_capacity * 0.90)):
-                c1.packet_queue.append(Packet(packet_id=8000 + k, source_id=bottlenecks[0], dest_id=self.network.sink_id, creation_time=0.0))
-            if len(bottlenecks) > 1:
-                self.network.nodes[bottlenecks[1]].energy.residual_energy = 0.35
+        from V2.simulator.packet import Packet
+        candidates = [n for n in range(self.network.num_nodes) if n != self.network.sink_id and len(self.network.nodes[n].neighbors) > 0]
+        
+        # 3 Congested nodes (high buffer bloat, queue occupancy > 85%)
+        congested_candidates = [n for n in candidates if 35 < self.network.nodes[n].dist_to_sink < 90][:3]
+        for c_id in congested_candidates:
+            c_node = self.network.nodes[c_id]
+            for k in range(int(c_node.queue_capacity * 0.88)):
+                c_node.packet_queue.append(Packet(packet_id=8000 + k, source_id=c_id, dest_id=self.network.sink_id, creation_time=0.0))
+            c_node.epoch_arrivals = 30
+            c_node.epoch_serviced = 5
+
+        # 4 Unhealthy nodes (critical battery depletion E_res <= 0.20J and high packet loss rate)
+        unhealthy_candidates = [n for n in candidates if n not in congested_candidates and self.network.nodes[n].dist_to_sink > 30][:4]
+        for u_id in unhealthy_candidates:
+            u_node = self.network.nodes[u_id]
+            u_node.energy.residual_energy = 0.20  # ~4% battery remaining
+            u_node.epoch_drops = 25
+            u_node.epoch_arrivals = 5
+
         self.classify_all()
 
     def find_route(self, source_id: int):
@@ -128,7 +141,8 @@ class WSNVisualizerApp:
             "path": path,
             "latency_ms": latency_ms,
             "hops": len(path) - 1,
-            "avoided": sorted(list(set(avoided_congested)))
+            "avoided": sorted(list(set(avoided_congested))),
+            "avoided_unhealthy": sorted(list(set(avoided_unhealthy)))
         }
 
     def get_state_json(self):

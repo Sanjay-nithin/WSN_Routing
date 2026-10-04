@@ -71,13 +71,22 @@ def run_live_mentor_demo():
     for _ in range(30):
         network.step(dt=0.2, routing_function=lambda u, net: min(net.nodes[u].neighbors, key=lambda v: net.nodes[v].dist_to_sink) if net.nodes[u].neighbors else None)
 
-    # Inject realistic bottleneck buffer bloat at key intermediate nodes
-    bottlenecks = [n for n in range(network.num_nodes) if 35 < network.nodes[n].dist_to_sink < 90]
-    if len(bottlenecks) >= 2:
-        c_node = network.nodes[bottlenecks[0]]
-        for k in range(int(c_node.queue_capacity * 0.85)):
-            c_node.packet_queue.append(Packet(packet_id=9000 + k, source_id=bottlenecks[0], dest_id=network.sink_id, creation_time=0.0))
-        network.nodes[bottlenecks[1]].energy.residual_energy = 0.35  # ~7% battery
+    # Inject realistic bottleneck buffer bloat and unhealthy battery-depleted nodes
+    candidates = [n for n in range(network.num_nodes) if n != network.sink_id and len(network.nodes[n].neighbors) > 0]
+    congested_candidates = [n for n in candidates if 35 < network.nodes[n].dist_to_sink < 90][:3]
+    for c_id in congested_candidates:
+        c_node = network.nodes[c_id]
+        for k in range(int(c_node.queue_capacity * 0.88)):
+            c_node.packet_queue.append(Packet(packet_id=9000 + k, source_id=c_id, dest_id=network.sink_id, creation_time=0.0))
+        c_node.epoch_arrivals = 30
+        c_node.epoch_serviced = 5
+
+    unhealthy_candidates = [n for n in candidates if n not in congested_candidates and network.nodes[n].dist_to_sink > 30][:4]
+    for u_id in unhealthy_candidates:
+        u_node = network.nodes[u_id]
+        u_node.energy.residual_energy = 0.20  # ~4% battery remaining
+        u_node.epoch_drops = 25
+        u_node.epoch_arrivals = 5
 
     # -------------------------------------------------------------------------
     # PART 2: 9-MODEL MACHINE LEARNING CLASSIFICATION BENCHMARK & SELECTION
@@ -173,7 +182,7 @@ def run_live_mentor_demo():
     print("  " + "-" * 78)
     print(f"  {'Node ID':<9} | {'Residual Battery':<18} | {'Buffer Queue':<14} | {'1D-CNN State':<14} | {'Confidence':<10}")
     print("  " + "-" * 78)
-    sample_nodes = list(dict.fromkeys([0, bottlenecks[0], bottlenecks[1], 15, 22])) if len(bottlenecks) >= 2 else [0, 1, 2, 3, 4]
+    sample_nodes = list(dict.fromkeys([0, congested_candidates[0], unhealthy_candidates[0], unhealthy_candidates[1], 11])) if congested_candidates and unhealthy_candidates else [0, 1, 2, 3, 4]
     for n_id in sample_nodes:
         node = network.nodes[n_id]
         cls_idx = preds[n_id]
