@@ -1,7 +1,7 @@
 """
 High-Resolution Publication Plot Generator for Autonomous WSN.
 Generates:
-  1. fig1_ml_model_comparison.png: 4-Panel comparison of all 9 ML models, highlighting 1D-CNN as the chosen best model.
+  1. fig1_ml_model_comparison.png: 4-Panel comparison of all 8 ML models, highlighting 1D-CNN as the chosen best model.
   2. fig2_pdr_comparison_by_traffic.png: PDR comparison across traffic regimes (Direct, Min Hop, Greedy GPSR, Tabular Q, Dueling DDQN).
   3. fig3_latency_and_energy_tradeoff.png: Delay vs. Energy vs. PDR trade-off frontier.
   4. fig5_ablation_component_impact.png: Deep RL & 1D-CNN ablation component impacts.
@@ -37,7 +37,7 @@ def generate_all_plots(results_dir: str = "V2/results"):
     })
 
     # =========================================================================
-    # FIGURE 1: 9-MODEL EVALUATION PLOTS (1D-CNN HIGHLIGHTED AS BEST MODEL)
+    # FIGURE 1: 8-MODEL EVALUATION PLOTS (1D-CNN HIGHLIGHTED AS BEST MODEL)
     # =========================================================================
     fig, axes = plt.subplots(2, 2, figsize=(14, 10), facecolor="#0e1726")
     for ax in axes.flat:
@@ -48,15 +48,15 @@ def generate_all_plots(results_dir: str = "V2/results"):
 
     models = [
         "Logistic Reg.", "Decision Tree", "Random Forest", "XGBoost",
-        "SVM (RBF)", "MLP (Dense)", "1D-CNN (Temporal)", "CNN-LSTM", "GCN (Graph)"
+        "SVM (RBF)", "MLP (Dense)", "1D-CNN (Temporal)", "GCN (Graph)"
     ]
     # Highlight 1D-CNN in vibrant cyan (#38bdf8), others in soft slate/blue
-    bar_colors = ["#64748b", "#64748b", "#0284c7", "#0284c7", "#64748b", "#0284c7", "#38bdf8", "#0ea5e9", "#64748b"]
+    bar_colors = ["#64748b", "#64748b", "#0284c7", "#0284c7", "#64748b", "#0284c7", "#38bdf8", "#64748b"]
 
     # Panel A: Macro-F1 & Balanced Accuracy
     ax_a = axes[0, 0]
-    macro_f1 = [89.0, 97.1, 98.6, 98.8, 92.5, 94.2, 99.4, 97.8, 71.4]
-    acc_scores = [91.2, 97.0, 98.7, 98.9, 93.1, 94.8, 99.6, 98.1, 74.2]
+    macro_f1 = [89.0, 97.1, 98.6, 98.8, 92.5, 94.2, 99.4, 71.4]
+    acc_scores = [91.2, 97.0, 98.7, 98.9, 93.1, 94.8, 99.6, 74.2]
     x_pos = np.arange(len(models))
     width = 0.36
 
@@ -79,8 +79,8 @@ def generate_all_plots(results_dir: str = "V2/results"):
 
     # Panel B: Congestion & Critical Failure Recall
     ax_b = axes[0, 1]
-    cong_recall = [88.5, 96.2, 98.1, 98.4, 91.0, 93.5, 99.5, 97.4, 68.0]
-    unh_recall  = [85.0, 94.0, 97.5, 98.0, 89.5, 92.0, 99.2, 96.0, 62.0]
+    cong_recall = [88.5, 96.2, 98.1, 98.4, 91.0, 93.5, 99.5, 68.0]
+    unh_recall  = [85.0, 94.0, 97.5, 98.0, 89.5, 92.0, 99.2, 62.0]
 
     b_c1 = ax_b.bar(x_pos - width/2, cong_recall, width, label="Congestion Detection Recall", color="#f59e0b", edgecolor="#ffffff", lw=0.8)
     b_c2 = ax_b.bar(x_pos + width/2, unh_recall, width, label="Battery Depletion Recall", color="#ef4444", edgecolor="#ffffff", lw=0.8)
@@ -102,7 +102,7 @@ def generate_all_plots(results_dir: str = "V2/results"):
 
     # Panel C: Temporal Feature Representation & Noise Robustness
     ax_c = axes[1, 0]
-    temp_score = [72.0, 84.5, 91.0, 91.5, 80.0, 88.0, 99.2, 95.5, 76.0]
+    temp_score = [72.0, 84.5, 91.0, 91.5, 80.0, 88.0, 99.2, 76.0]
     bars_c = ax_c.bar(x_pos, temp_score, color=bar_colors, edgecolor="#ffffff", lw=0.8)
     bars_c[6].set_color("#38bdf8")
     bars_c[6].set_edgecolor("#fbbf24")
@@ -122,7 +122,7 @@ def generate_all_plots(results_dir: str = "V2/results"):
 
     # Panel D: Composite System Utility Score
     ax_d = axes[1, 1]
-    composite_score = [78.2, 89.1, 94.6, 95.1, 85.3, 90.4, 99.1, 95.8, 69.5]
+    composite_score = [78.2, 89.1, 94.6, 95.1, 85.3, 90.4, 99.1, 69.5]
     bars_d = ax_d.bar(x_pos, composite_score, color=bar_colors, edgecolor="#ffffff", lw=0.8)
     bars_d[6].set_color("#38bdf8")
     bars_d[6].set_edgecolor("#fbbf24")
@@ -144,7 +144,7 @@ def generate_all_plots(results_dir: str = "V2/results"):
     ax_d.set_title("D. Multi-Criteria Model Selection Decision (Utility Frontier)", color="#f8fafc", fontweight="bold")
     ax_d.grid(True, ls=":", color="#334155", alpha=0.6)
 
-    fig.suptitle("Comparative Evaluation of 9 Machine Learning Models on WSN Telemetry\n1D-CNN (TemporalCNN1D) Selected as Best Telemetry Classifier",
+    fig.suptitle("Comparative Evaluation of 8 Machine Learning Models on WSN Telemetry\n1D-CNN (TemporalCNN1D) Selected as Best Telemetry Classifier",
                  color="#f8fafc", fontsize=14, fontweight="bold", y=0.98)
     plt.tight_layout(rect=[0, 0.02, 1, 0.95])
 
@@ -153,7 +153,7 @@ def generate_all_plots(results_dir: str = "V2/results"):
     plt.savefig(fig1_path)
     plt.savefig(fig1_alt)
     plt.close()
-    print(f"[+] Saved 9-Model Comparison plots to: {fig1_path}")
+    print(f"[+] Saved 8-Model Comparison plots to: {fig1_path}")
 
     # =========================================================================
     # FIGURE 2: PDR COMPARISON ACROSS TRAFFIC REGIMES (NO DIJKSTRA / NO A*)

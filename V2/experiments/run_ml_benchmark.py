@@ -1,7 +1,7 @@
 """
 WSN Machine Learning Benchmark & Training Script.
 Imports the processed WSN telemetry dataset from V2/datasets/processed/
-and trains/evaluates all 9 Machine Learning classification architectures.
+and trains/evaluates all 8 Machine Learning classification architectures.
 """
 
 import os
@@ -28,7 +28,6 @@ from V2.models.classical import ClassicalMLSuite
 from V2.models.boosting import XGBoostClassifierWrapper
 from V2.models.mlp import WSNMLP
 from V2.models.cnn_1d import TemporalCNN1D
-from V2.models.cnn_lstm import TemporalCNNLSTM
 from V2.models.gnn import WSNGCN
 from V2.models.trainer import train_pytorch_model
 
@@ -140,7 +139,7 @@ def run_training_and_benchmark(save_checkpoints: bool = True):
         xgb_model.save(os.path.join(ckpt_dir, "xgboost.joblib"))
 
     # 3. Deep Learning Models (PyTorch)
-    print("[+] Training Deep Learning Models (MLP, 1D-CNN, CNN-LSTM)...")
+    print("[+] Training Deep Learning Models (MLP, 1D-CNN)...")
     
     # MLP
     mlp = WSNMLP(in_features=12, num_classes=3)
@@ -172,25 +171,10 @@ def run_training_and_benchmark(save_checkpoints: bool = True):
     if save_checkpoints:
         torch.save(cnn.state_dict(), os.path.join(ckpt_dir, "cnn_1d.pt"))
 
-    # CNN-LSTM
-    cnn_lstm = TemporalCNNLSTM(in_features=12, hidden_dim=48, lstm_layers=1, num_classes=3)
-    train_pytorch_model(cnn_lstm, X_train_scaled, y_train, X_val_scaled, y_val, epochs=15)
-    t0 = time.perf_counter()
-    preds_cnnlstm = cnn_lstm.predict(X_test_scaled)
-    lat_cnnlstm = ((time.perf_counter() - t0) / len(X_test_scaled)) * 1e6
-    results.append({
-        "Model": "cnn_lstm",
-        "Accuracy (%)": accuracy_score(y_test, preds_cnnlstm) * 100.0,
-        "Macro-F1": f1_score(y_test, preds_cnnlstm, average="macro"),
-        "Latency (us)": lat_cnnlstm
-    })
-    if save_checkpoints:
-        torch.save(cnn_lstm.state_dict(), os.path.join(ckpt_dir, "cnn_lstm.pt"))
-
     # Print Summary Table
     df_res = pd.DataFrame(results)
     print("\n==========================================================================")
-    print("      WSN 9-MODEL BENCHMARK RESULTS (Trained on V2/datasets/processed/)")
+    print("      WSN 8-MODEL BENCHMARK RESULTS (Trained on V2/datasets/processed/)")
     print("==========================================================================")
     print(df_res.to_string(index=False))
     print("==========================================================================")

@@ -2,7 +2,7 @@
 WSN Live Demonstration Script for Mentor Reviews & Project Presentations.
 Executes the full pipeline:
   1. 2D Sensor Network Topology Construction (35 Nodes + Base Station)
-  2. Comprehensive Evaluation of all 9 Machine Learning Models -> Explicit Selection of 1D-CNN
+  2. Comprehensive Evaluation of all 8 Machine Learning Models -> Explicit Selection of 1D-CNN
   3. Live Node Telemetry Classification using 1D-CNN
   4. Comprehensive Evaluation of all Routing Algorithms -> Explicit Selection of Dueling Double DQN
   5. Live Multi-Hop Routing using Dueling Double DQN (DDDQN) guided by 1D-CNN risks
@@ -27,7 +27,6 @@ from V2.simulator.packet import Packet
 from V2.preprocessing import FeaturePreprocessor
 from V2.models.mlp import WSNMLP
 from V2.models.cnn_1d import TemporalCNN1D
-from V2.models.cnn_lstm import TemporalCNNLSTM
 from V2.models.gnn import WSNGCN
 from V2.routing.conventional import ConventionalBaselines
 from V2.routing.rl_agent import (
@@ -38,10 +37,10 @@ from V2.routing.rl_environment import WSNRoutingRLEnv
 from V2.plot_topology import generate_topology_plot
 
 
-def run_live_mentor_demo():
+def run_live_demo():
     print("=" * 84)
     print("   WIRELESS SENSOR NETWORK: AUTONOMOUS ML CLASSIFICATION & RL ROUTING")
-    print("   Comprehensive 9-Model Classifier Suite -> Active Model: 1D-CNN")
+    print("   Comprehensive 8-Model Classifier Suite -> Active Model: 1D-CNN")
     print("   Comprehensive Multi-Router Suite      -> Active Router: Dueling Double DQN")
     print("=" * 84)
 
@@ -89,9 +88,9 @@ def run_live_mentor_demo():
         u_node.epoch_arrivals = 5
 
     # -------------------------------------------------------------------------
-    # PART 2: 9-MODEL MACHINE LEARNING CLASSIFICATION BENCHMARK & SELECTION
+    # PART 2: 8-MODEL MACHINE LEARNING CLASSIFICATION BENCHMARK & SELECTION
     # -------------------------------------------------------------------------
-    print("\n[PHASE 2] Benchmarking All 9 Machine Learning Models on Telemetry Data...")
+    print("\n[PHASE 2] Benchmarking All 8 Machine Learning Models on Telemetry Data...")
     scaler_path = os.path.join(V2_DIR, "preprocessing", "scaler.joblib")
     ckpt_dir = os.path.join(V2_DIR, "results", "checkpoints")
     scaler = FeaturePreprocessor().load(scaler_path)
@@ -111,7 +110,7 @@ def run_live_mentor_demo():
     deg_inv_sqrt[np.isinf(deg_inv_sqrt)] = 0.0
     norm_adj = np.diag(deg_inv_sqrt) @ adj @ np.diag(deg_inv_sqrt)
 
-    # Load all 9 models
+    # Load all 8 models
     models = {}
     models["Logistic Regression"] = ("Linear Classifier", joblib.load(os.path.join(ckpt_dir, "logistic_regression.joblib")))
     models["Decision Tree"] = ("Interpretable Trees", joblib.load(os.path.join(ckpt_dir, "decision_tree.joblib")))
@@ -128,11 +127,6 @@ def run_live_mentor_demo():
     cnn.load_state_dict(torch.load(os.path.join(ckpt_dir, "cnn_1d.pt"), map_location="cpu", weights_only=False))
     cnn.eval()
     models["1D-CNN (TemporalCNN1D)"] = ("1D Convolutional", cnn)
-
-    cnn_lstm = TemporalCNNLSTM(in_features=12, hidden_dim=48, lstm_layers=1, num_classes=3)
-    cnn_lstm.load_state_dict(torch.load(os.path.join(ckpt_dir, "cnn_lstm.pt"), map_location="cpu", weights_only=False))
-    cnn_lstm.eval()
-    models["CNN-LSTM (Hybrid)"] = ("Recurrent Conv", cnn_lstm)
 
     gcn = WSNGCN(in_features=12, hidden_dim=32, num_classes=3)
     gcn.load_state_dict(torch.load(os.path.join(ckpt_dir, "gcn.pt"), map_location="cpu", weights_only=False))
@@ -325,12 +319,12 @@ def run_live_mentor_demo():
     print(f"  * Generated Plot saved to: {plot_file}")
 
     # -------------------------------------------------------------------------
-    # SUMMARY FOR MENTOR
+    # SUMMARY
     # -------------------------------------------------------------------------
     print("\n" + "=" * 84)
-    print("                     EXECUTIVE SUMMARY FOR YOUR MENTOR")
+    print("                     EXECUTIVE SUMMARY")
     print("=" * 84)
-    print("  1. 9-Model Comparison: Evaluated 9 ML architectures across telemetry metrics.")
+    print("  1. 8-Model Comparison: Evaluated 8 ML architectures across telemetry metrics.")
     print("     Chosen Active Classifier: 1D-CNN (TemporalCNN1D) for deep local feature")
     print("     extraction of temporal trends across battery and buffer telemetry.")
     print("  2. Multi-Router Benchmark: Compared Greedy Geographic, Tabular Q, and DDDQN.")
@@ -345,4 +339,4 @@ def run_live_mentor_demo():
 
 
 if __name__ == "__main__":
-    run_live_mentor_demo()
+    run_live_demo()
